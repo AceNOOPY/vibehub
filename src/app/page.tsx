@@ -3,6 +3,7 @@ import { desc, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { projects } from "@/db/schema";
 import { createProject } from "@/app/projects/actions";
+import Link from "next/link";
 
 export default async function Home() {
   const user = await requireUser();
@@ -30,7 +31,9 @@ export default async function Home() {
       ) : (
         <ul className="mt-6 space-y-3">
           {projectList.map((project) => (
-            <li key={project.id}>{project.name}</li>
+            <li key={project.id}>
+              <Link href={`/projects/${project.id}`}>{project.name}</Link>
+            </li>
           ))}
         </ul>
       )}
