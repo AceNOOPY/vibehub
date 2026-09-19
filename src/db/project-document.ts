@@ -7,7 +7,7 @@ export type TextNode = {
 };
 
 export type ProjectDocument = {
-    schemeVersion: 1;
+    schemaVersion: 1;
     pages: {
         id: string;
         name: string;
