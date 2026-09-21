@@ -4,7 +4,8 @@ import { getDb } from "@/db";
 import { projects } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
 import { TextNodeEditor } from "@/components/text-node-editor";
-import { addTextNode, createPage, updateTextNode, deleteTextNode } from "@/app/projects/actions";
+import { PageNameEditor } from "@/components/page-name-editor";
+import { addTextNode, createPage, updateTextNode, deleteTextNode, renamePage, deletePage } from "@/app/projects/actions";
 import Link from "next/link";
 
 export default async function ProjectPage({
@@ -74,10 +75,18 @@ export default async function ProjectPage({
             <ul className="mt-6 space-y-2">
                 {project.document.pages.filter((page) => page.id === activePage.id).map((page) => {
                     const addText = addTextNode.bind(null, id, page.id);
+                    const rename = renamePage.bind(null, id, page.id);
+                    const deletePageAction = deletePage.bind(null, id, page.id);
 
                     return (
                         <li key={page.id}>
-                            <h2 className="text-xl font-semibold">{page.name}</h2>
+                            <PageNameEditor 
+                                key={page.id}
+                                pageName={page.name} 
+                                action={rename} 
+                                deleteAction={deletePageAction}
+                                isHome={page.id === project.document.pages[0].id}
+                            />
 
                             <div className="mt-4 space-y-2">
                                 {page.nodes.length === 0 ? (
