@@ -251,3 +251,213 @@ export async function deleteTextNode(
 
   revalidatePath(`/projects/${projectId}`);
 }
+
+export async function createPage(
+  projectId: string,
+  formData: FormData
+) {
+  const user = await requireUser();
+  const name = String(formData.get("name") ?? "").trim();
+
+  if (!name || name.length > 50) {
+    throw new Error("Page name must be 1–50 characters");
+  }
+
+  const db = getDb();
+
+  const [project] = await db
+    .select({
+      document: projects.document,
+      revision: projects.revision,
+    })
+    .from(projects)
+    .where(
+      and(
+        eq(projects.id, projectId),
+        eq(projects.ownerId, user.id)
+      )
+    )
+    .limit(1);
+
+  if (!project) {
+    throw new Error("Project not found");
+  }
+
+  if (project.document.pages.length >= 20) {
+    throw new Error("A project can have at most 20 pages");
+  }
+
+  const nameAlreadyExists = project.document.pages.some((page) => page.name.toLowerCase() === name.toLowerCase());
+
+  if (nameAlreadyExists) {
+    throw new Error("A page with this name already exists");
+  }
+
+  const updatedDocument = {
+    ...project.document,
+    pages: [
+      ...project.document.pages,
+      { id: crypto.randomUUID(), name, nodes: [] },
+    ],
+  };
+
+  const updateProjects = await db.update(projects)
+    .set({
+      document: updatedDocument,
+      revision: sql`${projects.revision} + 1`,
+    })
+    .where(
+      and(
+        eq(projects.id, projectId),
+        eq(projects.ownerId, user.id),
+        eq(projects.revision, project.revision)
+      ),
+    )
+    .returning({ id: projects.id });
+
+  if (updateProjects.length === 0) {
+    throw new Error("Project changed while you were editing it.");
+  }
+
+  revalidatePath(`/projects/${projectId}`);
+}
+
+export async function renamePage(
+  projectId: string,
+  pageId: string,
+  formData: FormData
+) {
+  const user = await requireUser();
+  const name = String(formData.get("name") ?? "").trim();
+
+  if (!name || name.length > 50) {
+    throw new Error("Page name must be 1–50 characters");
+  }
+
+  const db = getDb();
+
+  const [project] = await db
+    .select({
+      document: projects.document,
+      revision: projects.revision,
+    })
+    .from(projects)
+    .where(
+      and(
+        eq(projects.id, projectId),
+        eq(projects.ownerId, user.id)
+      )
+    )
+    .limit(1);
+
+  if (!project) {
+    throw new Error("Project not found");
+  }
+
+  const page = project.document.pages.find((page) => page.id === pageId);
+
+  if (!page) {
+    throw new Error("Page not found");
+  }
+
+  const nameAlreadyExists = project.document.pages.some((p) => p.name.toLowerCase() === name.toLowerCase() && p.id !== pageId);
+
+  if (nameAlreadyExists) {
+    throw new Error("A page with this name already exists");
+  }
+
+  const updatedDocument = {
+    ...project.document,
+    pages: project.document.pages.map((p) =>
+      p.id === pageId ? { ...p, name } : p
+    ),
+  };
+
+  const updateProjects = await db.update(projects)
+    .set({
+      document: updatedDocument,
+      revision: sql`${projects.revision} + 1`,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(projects.id, projectId),
+        eq(projects.ownerId, user.id),
+        eq(projects.revision, project.revision)
+      ),
+    )
+    .returning({ id: projects.id });
+
+  if (updateProjects.length === 0) {
+    throw new Error("Project changed while you were editing it.");
+  }
+
+  revalidatePath(`/projects/${projectId}`);
+}
+
+export async function deletePage(
+  projectId: string,
+  pageId: string
+) {
+  const user = await requireUser();
+  const db = getDb();
+
+  const [project] = await db
+    .select({
+      document: projects.document,
+      revision: projects.revision,
+    })
+    .from(projects)
+    .where(
+      and(
+        eq(projects.id, projectId),
+        eq(projects.ownerId, user.id)
+      )
+    )
+    .limit(1);
+
+  if (!project) {
+    throw new Error("Project not found");
+  }
+
+  const targetPage = project.document.pages.find(
+    (page) => page.id === pageId,
+  );
+  
+  if (!targetPage) {
+    throw new Error("Page not found");
+  }
+
+  const homePage = project.document.pages[0];
+
+  if (targetPage.id === homePage.id) {
+    throw new Error("The home page cannot be deleted");
+  }
+
+  const updatedDocument = {
+    ...project.document,
+    pages: project.document.pages.filter((page) => page.id !== pageId),
+  };
+
+  const updateProjects = await db.update(projects)
+    .set({
+      document: updatedDocument,
+      revision: sql`${projects.revision} + 1`,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(projects.id, projectId),
+        eq(projects.ownerId, user.id),
+        eq(projects.revision, project.revision)
+      ),
+    )
+    .returning({ id: projects.id });
+
+  if (updateProjects.length === 0) {
+    throw new Error("Project changed while you were editing it.");
+  }
+
+  revalidatePath(`/projects/${projectId}`);
+  redirect(`/projects/${projectId}`);
+}
