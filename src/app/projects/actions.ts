@@ -6,7 +6,18 @@ import { getDb } from "@/db";
 import { projects } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
 import { and, eq, sql } from "drizzle-orm";
-import type { TextNode } from "@/db/project-document";
+import type { ButtonNode, TextNode } from "@/db/project-document";
+
+function isAllowedButtonHref(href: string){
+  if (href.startsWith("/") && !href.startsWith("//")) {
+    return true;
+  }
+  try {
+    return new URL(href).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
 
 export async function createProject(formData: FormData) {
   const user = await requireUser();
@@ -103,6 +114,85 @@ export async function addTextNode(
   revalidatePath(`/projects/${projectId}`);
 }
 
+export async function addButtonNode(
+  projectId: string,
+  pageId: string,
+  formData: FormData
+) {
+  const user = await requireUser();
+  const label = String(formData.get("label") ?? "").trim();
+  const href = String(formData.get("href") ?? "").trim();
+
+  if (!label || label.length > 100) {
+    throw new Error("Button label must be 1–100 characters");
+  }
+
+  if (!href || href.length > 2048 || !isAllowedButtonHref(href)) {
+    throw new Error("Enter a valid internal or HTTPS URL");
+  }
+
+  const db = getDb();
+
+  const [project] = await db
+    .select({
+      document: projects.document,
+      revision: projects.revision,
+    })
+    .from(projects)
+    .where(
+      and(
+        eq(projects.id, projectId),
+        eq(projects.ownerId, user.id)
+      )
+    )
+    .limit(1);
+
+  if (!project) {
+    throw new Error("Project not found");
+  }
+
+  const pageExists = project.document.pages.some((page) => page.id === pageId);
+
+  if (!pageExists) {
+    throw new Error("Page not found");
+  }
+
+  const node: ButtonNode = {
+    id: crypto.randomUUID(),
+    type: "button",
+    props: { label, href },
+  };
+
+  const updatedDocument = {
+    ...project.document,
+    pages: project.document.pages.map((page) =>
+      page.id === pageId
+        ? { ...page, nodes: [...page.nodes, node] }
+        : page
+    ),
+  };
+
+  const updateProjects = await db.update(projects)
+    .set({
+      document: updatedDocument,
+      revision: sql`${projects.revision} + 1`,
+    })
+    .where(
+      and(
+        eq(projects.id, projectId),
+        eq(projects.ownerId, user.id),
+        eq(projects.revision, project.revision)
+      ),
+    )
+    .returning({ id: projects.id });
+
+  if (updateProjects.length === 0) {
+    throw new Error("Failed to update project. Please try again.");
+  }
+
+  revalidatePath(`/projects/${projectId}`);
+}
+
 export async function updateTextNode(
   projectId: string,
   pageId: string,
@@ -157,7 +247,94 @@ export async function updateTextNode(
         ? {
           ...page,
           nodes: page.nodes.map((node) =>
-            node.id === nodeId ? { ...node, props: { text } } : node
+            node.id === nodeId && node.type === "text" ? { ...node, props: { text } } : node
+          ),
+        }
+        : page
+    ),
+  };
+
+  const updateProjects = await db.update(projects)
+    .set({
+      document: updatedDocument,
+      revision: sql`${projects.revision} + 1`,
+    })
+    .where(
+      and(
+        eq(projects.id, projectId),
+        eq(projects.ownerId, user.id),
+        eq(projects.revision, project.revision)
+      ),
+    )
+    .returning({ id: projects.id });
+
+  if (updateProjects.length === 0) {
+    throw new Error("Project changed while you were editing it.");
+  }
+
+  revalidatePath(`/projects/${projectId}`);
+}
+
+export async function updateButtonNode(
+  projectId: string,
+  pageId: string,
+  nodeId: string,
+  formData: FormData
+) {
+  const user = await requireUser();
+  const label = String(formData.get("label") ?? "").trim();
+  const href = String(formData.get("href") ?? "").trim();
+
+  if (!label || label.length > 100) {
+    throw new Error("Label must be 1–100 characters");
+  }
+
+  if (!href || href.length > 2048) {
+    throw new Error("Enter a valid internal or HTTPS URL");
+  }
+
+  const db = getDb();
+
+  const [project] = await db
+    .select({
+      document: projects.document,
+      revision: projects.revision,
+    })
+    .from(projects)
+    .where(
+      and(
+        eq(projects.id, projectId),
+        eq(projects.ownerId, user.id)
+      )
+    )
+    .limit(1);
+
+  if (!project) {
+    throw new Error("Project not found");
+  }
+
+  const page = project.document.pages.find((page) => page.id === pageId);
+
+  if (!page) {
+    throw new Error("Page not found");
+  }
+
+  const targetNode = project.document.pages
+    .find((page) => page.id === pageId)
+    ?.nodes.find((node) => node.id === nodeId);
+
+  if (!targetNode || targetNode.type !== "button") {
+    throw new Error("Button node not found");
+  }
+
+  const updatedDocument = {
+    ...project.document,
+    pages: project.document.pages.map((page) =>
+      page.id === pageId
+        ? {
+          ...page,
+          nodes: page.nodes.map((node) =>
+            node.id === nodeId && node.type === "button" ? { ...node, props: { label, href } } : node
           ),
         }
         : page
@@ -251,6 +428,74 @@ export async function deleteTextNode(
 
   revalidatePath(`/projects/${projectId}`);
 }
+
+export async function deleteButtonNode(
+  projectId: string,
+  pageId: string,
+  nodeId: string
+) {
+  const user = await requireUser();
+  const db = getDb();
+
+  const [project] = await db
+    .select({
+      document: projects.document,
+      revision: projects.revision,
+    })
+    .from(projects)
+    .where(
+      and(
+        eq(projects.id, projectId),
+        eq(projects.ownerId, user.id)
+      )
+    )
+    .limit(1);
+
+  if (!project) {
+    throw new Error("Project not found");
+  }
+
+  const targetNode = project.document.pages
+    .find((page) => page.id === pageId)
+    ?.nodes.find((node) => node.id === nodeId);
+
+  if (!targetNode || targetNode.type !== "button") {
+    throw new Error("Button node not found");
+  }
+
+  const updatedDocument = {
+    ...project.document,
+    pages: project.document.pages.map((page) =>
+      page.id === pageId
+        ? {
+          ...page,
+          nodes: page.nodes.filter((node) => node.id !== nodeId),
+        }
+        : page
+    ),
+  };
+
+  const updateProjects = await db.update(projects)
+    .set({
+      document: updatedDocument,
+      revision: sql`${projects.revision} + 1`,
+    })
+    .where(
+      and(
+        eq(projects.id, projectId),
+        eq(projects.ownerId, user.id),
+        eq(projects.revision, project.revision)
+      ),
+    )
+    .returning({ id: projects.id });
+
+  if (updateProjects.length === 0) {
+    throw new Error("Project changed while you were editing it.");
+  }
+
+  revalidatePath(`/projects/${projectId}`);
+}
+
 
 export async function createPage(
   projectId: string,

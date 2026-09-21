@@ -5,7 +5,8 @@ import { projects } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
 import { TextNodeEditor } from "@/components/text-node-editor";
 import { PageNameEditor } from "@/components/page-name-editor";
-import { addTextNode, createPage, updateTextNode, deleteTextNode, renamePage, deletePage } from "@/app/projects/actions";
+import { ButtonNodeEditor } from "@/components/button-node-editor";
+import { addButtonNode, addTextNode, createPage, updateTextNode, updateButtonNode, deleteTextNode, renamePage, deletePage, deleteButtonNode } from "@/app/projects/actions";
 import Link from "next/link";
 
 export default async function ProjectPage({
@@ -77,6 +78,7 @@ export default async function ProjectPage({
                     const addText = addTextNode.bind(null, id, page.id);
                     const rename = renamePage.bind(null, id, page.id);
                     const deletePageAction = deletePage.bind(null, id, page.id);
+                    const addButton = addButtonNode.bind(null, id, page.id);
 
                     return (
                         <li key={page.id}>
@@ -97,6 +99,7 @@ export default async function ProjectPage({
                                             case "text":
                                                 const updateText = updateTextNode.bind(null, id, page.id, node.id);
                                                 const deleteText = deleteTextNode.bind(null, id, page.id, node.id);
+                                                
 
                                                 return (
                                                     <TextNodeEditor
@@ -104,6 +107,19 @@ export default async function ProjectPage({
                                                         node={node}
                                                         action={updateText}
                                                         deleteAction={deleteText}
+                                                    />
+                                                );
+                                            
+                                            case "button":
+                                                const updateButton = updateButtonNode.bind(null, id, page.id, node.id);
+                                                const deleteButton = deleteButtonNode.bind(null, id, page.id, node.id);
+
+                                                return (
+                                                    <ButtonNodeEditor
+                                                        key={node.id}
+                                                        node={node}
+                                                        action={updateButton}
+                                                        deleteAction={deleteButton}
                                                     />
                                                 );
 
@@ -125,6 +141,28 @@ export default async function ProjectPage({
                                     className="rounded bg-black px-4 py-2 text-white"
                                 >
                                     Add Text
+                                </button>
+                            </form>
+                            <form action={addButton} className="mt-3 flex gap-2">
+                                <input
+                                    name="label"
+                                    placeholder="Button label"
+                                    required
+                                    maxLength={100}
+                                    className="flex-1 rounded border p-2"
+                                />
+                                <input
+                                    name="href"
+                                    placeholder="Button href"
+                                    required
+                                    maxLength={2048}
+                                    className="flex-1 rounded border p-2"
+                                />
+                                <button
+                                    type="submit"
+                                    className="rounded bg-black px-4 py-2 text-white"
+                                >
+                                    Add Button
                                 </button>
                             </form>
                         </li>
