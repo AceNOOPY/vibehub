@@ -7,9 +7,10 @@ import type { TextNode } from "@/db/project-document";
 type TextNodeEditorProps = {
     node: TextNode;
     action: (formData: FormData) => Promise<void>;
+    deleteAction: () => Promise<void>;
 };
 
-export function TextNodeEditor({ node, action }: TextNodeEditorProps) {
+export function TextNodeEditor({ node, action, deleteAction }: TextNodeEditorProps) {
     const [text, setText] = useState(node.props.text);
     const [isEditing, setIsEditing] = useState(false);
 
@@ -17,6 +18,16 @@ export function TextNodeEditor({ node, action }: TextNodeEditorProps) {
         await action(formData);
         setText(text.trim());
         setIsEditing(false);
+    }
+
+    async function handleDelete() {
+        const confirmed = window.confirm("Are you sure you want to delete this text?");
+
+        if (!confirmed) {
+            return;
+        }
+
+        await deleteAction();
     }
 
     function handleCancel() {
@@ -35,6 +46,13 @@ export function TextNodeEditor({ node, action }: TextNodeEditorProps) {
                     className="rounded border px-3 py-1"
                 >
                     Edit
+                </button>
+                <button
+                    type="button"
+                    onClick={handleDelete}
+                    className="rounded border border-red-600 px-3 py-1 text-red-600"
+                >
+                    Delete
                 </button>
             </div>
         );

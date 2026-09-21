@@ -184,3 +184,70 @@ export async function updateTextNode(
 
   revalidatePath(`/projects/${projectId}`);
 }
+
+export async function deleteTextNode(
+  projectId: string,
+  pageId: string,
+  nodeId: string
+) {
+  const user = await requireUser();
+  const db = getDb();
+
+  const [project] = await db
+    .select({
+      document: projects.document,
+      revision: projects.revision,
+    })
+    .from(projects)
+    .where(
+      and(
+        eq(projects.id, projectId),
+        eq(projects.ownerId, user.id)
+      )
+    )
+    .limit(1);
+
+  if (!project) {
+    throw new Error("Project not found");
+  }
+
+  const targetNode = project.document.pages
+    .find((page) => page.id === pageId)
+    ?.nodes.find((node) => node.id === nodeId);
+
+  if (!targetNode || targetNode.type !== "text") {
+    throw new Error("Text node not found");
+  }
+
+  const updatedDocument = {
+    ...project.document,
+    pages: project.document.pages.map((page) =>
+      page.id === pageId
+        ? {
+          ...page,
+          nodes: page.nodes.filter((node) => node.id !== nodeId),
+        }
+        : page
+    ),
+  };
+
+  const updateProjects = await db.update(projects)
+    .set({
+      document: updatedDocument,
+      revision: sql`${projects.revision} + 1`,
+    })
+    .where(
+      and(
+        eq(projects.id, projectId),
+        eq(projects.ownerId, user.id),
+        eq(projects.revision, project.revision)
+      ),
+    )
+    .returning({ id: projects.id });
+
+  if (updateProjects.length === 0) {
+    throw new Error("Project changed while you were editing it.");
+  }
+
+  revalidatePath(`/projects/${projectId}`);
+}

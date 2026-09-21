@@ -4,7 +4,7 @@ import { getDb } from "@/db";
 import { projects } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
 import { TextNodeEditor } from "@/components/text-node-editor";
-import { addTextNode, updateTextNode } from "@/app/projects/actions";
+import { addTextNode, updateTextNode, deleteTextNode } from "@/app/projects/actions";
 
 export default async function ProjectPage({
     params,
@@ -44,14 +44,17 @@ export default async function ProjectPage({
                                         switch (node.type) {
                                             case "text":
                                                 const updateText = updateTextNode.bind(null, id, page.id, node.id);
+                                                const deleteText = deleteTextNode.bind(null, id, page.id, node.id);
 
                                                 return (
                                                     <TextNodeEditor
                                                         key={node.id}
                                                         node={node}
                                                         action={updateText}
+                                                        deleteAction={deleteText}
                                                     />
                                                 );
+
                                         }
                                     })
                                 )}
