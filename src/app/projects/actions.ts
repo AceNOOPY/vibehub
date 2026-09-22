@@ -8,7 +8,7 @@ import { requireUser } from "@/lib/auth";
 import { and, eq, sql } from "drizzle-orm";
 import type { ButtonNode, TextNode } from "@/db/project-document";
 
-function isAllowedButtonHref(href: string){
+function isAllowedButtonHref(href: string) {
   if (href.startsWith("/") && !href.startsWith("//")) {
     return true;
   }
@@ -668,7 +668,7 @@ export async function deletePage(
   const targetPage = project.document.pages.find(
     (page) => page.id === pageId,
   );
-  
+
   if (!targetPage) {
     throw new Error("Page not found");
   }
@@ -705,4 +705,92 @@ export async function deletePage(
 
   revalidatePath(`/projects/${projectId}`);
   redirect(`/projects/${projectId}`);
+}
+
+export async function moveNode(
+  projectId: string,
+  pageId: string,
+  nodeId: string,
+  direction: "up" | "down"
+) {
+  if (direction !== "up" && direction !== "down") {
+    throw new Error("Invalid move direction");
+  }
+
+  const user = await requireUser();
+  const db = getDb();
+
+  const [project] = await db
+    .select({
+      document: projects.document,
+      revision: projects.revision,
+    })
+    .from(projects)
+    .where(
+      and(
+        eq(projects.id, projectId),
+        eq(projects.ownerId, user.id)
+      )
+    )
+    .limit(1);
+
+  if (!project) {
+    throw new Error("Project not found");
+  }
+
+  const page = project.document.pages.find((page) => page.id === pageId);
+
+  if (!page) {
+    throw new Error("Page not found");
+  }
+
+  const nodeIndex = page.nodes.findIndex((node) => node.id === nodeId);
+
+  if (nodeIndex === -1) {
+    throw new Error("Node not found");
+  }
+
+  const targetIndex = direction === "up" ? nodeIndex - 1 : nodeIndex + 1;
+
+  if (targetIndex < 0 || targetIndex >= page.nodes.length) {
+    return;
+  }
+
+  const reorderedNodes = [...page.nodes];
+  const [node] = reorderedNodes.splice(nodeIndex, 1);
+
+  if (!node) {
+    throw new Error("Node not found");
+  }
+
+  reorderedNodes.splice(targetIndex, 0, node);
+
+  const updatedDocument = {
+    ...project.document,
+    pages: project.document.pages.map((currentPage) =>
+      currentPage.id === pageId
+        ? { ...currentPage, nodes: reorderedNodes }
+        : currentPage,
+    ),
+  };
+
+  const updateProjects = await db.update(projects)
+    .set({
+      document: updatedDocument,
+      revision: sql`${projects.revision} + 1`,
+    })
+    .where(
+      and(
+        eq(projects.id, projectId),
+        eq(projects.ownerId, user.id),
+        eq(projects.revision, project.revision)
+      ),
+    )
+    .returning({ id: projects.id });
+
+  if (updateProjects.length === 0) {
+    throw new Error("Project changed while you were editing it.");
+  }
+
+  revalidatePath(`/projects/${projectId}`)
 }
