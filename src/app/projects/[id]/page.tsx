@@ -6,7 +6,8 @@ import { requireUser } from "@/lib/auth";
 import { TextNodeEditor } from "@/components/text-node-editor";
 import { PageNameEditor } from "@/components/page-name-editor";
 import { ButtonNodeEditor } from "@/components/button-node-editor";
-import { addButtonNode, addTextNode, createPage, updateTextNode, updateButtonNode, deleteTextNode, renamePage, deletePage, deleteButtonNode } from "@/app/projects/actions";
+import { NodeMoveControls } from "@/components/node-move-controls";
+import { addButtonNode, addTextNode, createPage, updateTextNode, updateButtonNode, deleteTextNode, renamePage, deletePage, deleteButtonNode, moveNode } from "@/app/projects/actions";
 import Link from "next/link";
 
 export default async function ProjectPage({
@@ -55,9 +56,9 @@ export default async function ProjectPage({
                     Add Page
                 </button>
             </form>
-            <nav 
+            <nav
                 aria-label="Project pages"
-                className="mt-6, flex gap-2"
+                className="mt-6 flex gap-2"
             >
                 {project.document.pages.map((page) => (
                     <Link
@@ -82,10 +83,10 @@ export default async function ProjectPage({
 
                     return (
                         <li key={page.id}>
-                            <PageNameEditor 
+                            <PageNameEditor
                                 key={page.id}
-                                pageName={page.name} 
-                                action={rename} 
+                                pageName={page.name}
+                                action={rename}
                                 deleteAction={deletePageAction}
                                 isHome={page.id === project.document.pages[0].id}
                             />
@@ -94,36 +95,90 @@ export default async function ProjectPage({
                                 {page.nodes.length === 0 ? (
                                     <p className="text-gray-500">No content yet.</p>
                                 ) : (
-                                    page.nodes.map((node) => {
-                                        switch (node.type) {
-                                            case "text":
-                                                const updateText = updateTextNode.bind(null, id, page.id, node.id);
-                                                const deleteText = deleteTextNode.bind(null, id, page.id, node.id);
-                                                
+                                    page.nodes.map((node, nodeIndex) => {
+                                        const moveUp = moveNode.bind(
+                                            null,
+                                            id,
+                                            page.id,
+                                            node.id,
+                                            "up",
+                                        );
 
-                                                return (
-                                                    <TextNodeEditor
-                                                        key={node.id}
-                                                        node={node}
-                                                        action={updateText}
-                                                        deleteAction={deleteText}
-                                                    />
-                                                );
-                                            
-                                            case "button":
-                                                const updateButton = updateButtonNode.bind(null, id, page.id, node.id);
-                                                const deleteButton = deleteButtonNode.bind(null, id, page.id, node.id);
+                                        const moveDown = moveNode.bind(
+                                            null,
+                                            id,
+                                            page.id,
+                                            node.id,
+                                            "down",
+                                        );
 
-                                                return (
-                                                    <ButtonNodeEditor
-                                                        key={node.id}
-                                                        node={node}
-                                                        action={updateButton}
-                                                        deleteAction={deleteButton}
-                                                    />
-                                                );
+                                        function renderEditor() {
+                                            switch (node.type) {
+                                                case "text": {
+                                                    const updateText = updateTextNode.bind(
+                                                        null,
+                                                        id,
+                                                        page.id,
+                                                        node.id,
+                                                    );
 
+                                                    const deleteText = deleteTextNode.bind(
+                                                        null,
+                                                        id,
+                                                        page.id,
+                                                        node.id,
+                                                    );
+
+                                                    return (
+                                                        <TextNodeEditor
+                                                            node={node}
+                                                            action={updateText}
+                                                            deleteAction={deleteText}
+                                                        />
+                                                    );
+                                                }
+
+                                                case "button": {
+                                                    const updateButton = updateButtonNode.bind(
+                                                        null,
+                                                        id,
+                                                        page.id,
+                                                        node.id,
+                                                    );
+
+                                                    const deleteButton = deleteButtonNode.bind(
+                                                        null,
+                                                        id,
+                                                        page.id,
+                                                        node.id,
+                                                    );
+
+                                                    return (
+                                                        <ButtonNodeEditor
+                                                            node={node}
+                                                            action={updateButton}
+                                                            deleteAction={deleteButton}
+                                                        />
+                                                    );
+                                                }
+                                            }
                                         }
+
+                                        return (
+                                            <div
+                                                key={node.id}
+                                                className="flex items-start gap-2"
+                                            >
+                                                <NodeMoveControls
+                                                    moveUpAction={moveUp}
+                                                    moveDownAction={moveDown}
+                                                    canMoveUp={nodeIndex > 0}
+                                                    canMoveDown={nodeIndex < page.nodes.length - 1}
+                                                />
+
+                                                <div className="flex-1">{renderEditor()}</div>
+                                            </div>
+                                        );
                                     })
                                 )}
                             </div>
