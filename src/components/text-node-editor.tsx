@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import type { TextNode } from "@/db/project-document";
+import type { TextAlignment, TextNode } from "@/db/project-document";
 
 type TextNodeEditorProps = {
     node: TextNode;
@@ -12,6 +12,10 @@ type TextNodeEditorProps = {
 
 export function TextNodeEditor({ node, action, deleteAction }: TextNodeEditorProps) {
     const [text, setText] = useState(node.props.text);
+    const [alignment, setAlignment] =
+        useState<TextAlignment>(
+            node.props.alignment ?? "left",
+        );
     const [isEditing, setIsEditing] = useState(false);
 
     async function handleSubmit(formData: FormData) {
@@ -32,13 +36,28 @@ export function TextNodeEditor({ node, action, deleteAction }: TextNodeEditorPro
 
     function handleCancel() {
         setText(node.props.text);
+        setAlignment(node.props.alignment ?? "left");
         setIsEditing(false);
     }
+
+    const alignmentClass: Record<
+        TextAlignment,
+        string
+    > = {
+        left: "text-left",
+        center: "text-center",
+        right: "text-right",
+    };
 
     if (!isEditing) {
         return (
             <div className="flex items-center gap-3">
-                <p className="flex-1">{text}</p>
+                <p
+                    className={`min-w-0 flex-1 ${alignmentClass[alignment]
+                        }`}
+                >
+                    {text}
+                </p>
 
                 <button
                     type="button"
@@ -70,6 +89,21 @@ export function TextNodeEditor({ node, action, deleteAction }: TextNodeEditorPro
                 maxLength={2000}
                 className="flex-1 rounded border p-2"
             />
+
+            <select
+                name="alignment"
+                value={alignment}
+                onChange={(event) =>
+                    setAlignment(
+                        event.target.value as TextAlignment,
+                    )
+                }
+                className="rounded border p-2"
+            >
+                <option value="left">Left</option>
+                <option value="center">Center</option>
+                <option value="right">Right</option>
+            </select>
 
             <button
                 type="submit"

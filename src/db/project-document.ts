@@ -3,6 +3,7 @@ export type TextNode = {
     type: "text";
     props: {
         text: string;
+        alignment?: TextAlignment;
     };
 };
 
@@ -12,6 +13,7 @@ export type ButtonNode = {
     props: {
         label: string;
         href: string;
+        variant?: ButtonVariant;
     };
 };
 
@@ -27,3 +29,13 @@ export type ProjectDocument = {
     schemaVersion: 1;
     pages: ProjectPage[];
 };
+
+export type TextAlignment =
+    | "left"
+    | "center"
+    | "right";
+
+export type ButtonVariant =
+    | "primary"
+    | "secondary"
+    | "outline";

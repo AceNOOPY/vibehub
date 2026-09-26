@@ -6,7 +6,12 @@ import { getDb } from "@/db";
 import { projects } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
 import { and, eq, sql } from "drizzle-orm";
-import type { ButtonNode, TextNode } from "@/db/project-document";
+import type {
+  ButtonNode,
+  ButtonVariant,
+  TextNode,
+  TextAlignment,
+} from "@/db/project-document";
 
 function isAllowedButtonHref(href: string) {
   if (href.startsWith("/") && !href.startsWith("//")) {
@@ -17,6 +22,24 @@ function isAllowedButtonHref(href: string) {
   } catch {
     return false;
   }
+}
+
+function isButtonVariant(value: string): value is ButtonVariant {
+  return (
+    value === "primary" ||
+    value === "secondary" ||
+    value === "outline"
+  );
+}
+
+function isTextAlignment(
+  value: string,
+): value is TextAlignment {
+  return (
+    value === "left" ||
+    value === "center" ||
+    value === "right"
+  );
 }
 
 export async function createProject(formData: FormData) {
@@ -81,7 +104,10 @@ export async function addTextNode(
   const node: TextNode = {
     id: crypto.randomUUID(),
     type: "text",
-    props: { text },
+    props: {
+      text,
+      alignment: "left",
+    },
   };
 
   const updatedDocument = {
@@ -160,7 +186,7 @@ export async function addButtonNode(
   const node: ButtonNode = {
     id: crypto.randomUUID(),
     type: "button",
-    props: { label, href },
+    props: { label, href, variant: "primary" },
   };
 
   const updatedDocument = {
@@ -201,10 +227,19 @@ export async function updateTextNode(
 ) {
   const user = await requireUser();
   const text = String(formData.get("text") ?? "").trim();
+  const alignmentValue = String(
+    formData.get("alignment") ?? "left",
+  );
 
   if (!text || text.length > 2000) {
     throw new Error("Text must be 1–2000 characters");
   }
+
+  if (!isTextAlignment(alignmentValue)) {
+    throw new Error("Invalid text alignment");
+  }
+
+  const alignment = alignmentValue;
 
   const db = getDb();
 
@@ -247,7 +282,16 @@ export async function updateTextNode(
         ? {
           ...page,
           nodes: page.nodes.map((node) =>
-            node.id === nodeId && node.type === "text" ? { ...node, props: { text } } : node
+            node.id === nodeId && node.type === "text"
+              ? {
+                ...node,
+                props: {
+                  ...node.props,
+                  text,
+                  alignment,
+                },
+              }
+              : node,
           ),
         }
         : page
@@ -284,13 +328,22 @@ export async function updateButtonNode(
   const user = await requireUser();
   const label = String(formData.get("label") ?? "").trim();
   const href = String(formData.get("href") ?? "").trim();
+  const variant = String(formData.get("variant") ?? "primary");
 
   if (!label || label.length > 100) {
     throw new Error("Label must be 1–100 characters");
   }
 
-  if (!href || href.length > 2048) {
+  if (
+    !href ||
+    href.length > 2048 ||
+    !isAllowedButtonHref(href)
+  ) {
     throw new Error("Enter a valid internal or HTTPS URL");
+  }
+
+  if (!isButtonVariant(variant)) {
+    throw new Error("Invalid button variant");
   }
 
   const db = getDb();
@@ -334,7 +387,12 @@ export async function updateButtonNode(
         ? {
           ...page,
           nodes: page.nodes.map((node) =>
-            node.id === nodeId && node.type === "button" ? { ...node, props: { label, href } } : node
+            node.id === nodeId && node.type === "button"
+              ? {
+                ...node,
+                props: { ...node.props, label, href, variant },
+              }
+              : node,
           ),
         }
         : page
@@ -495,7 +553,6 @@ export async function deleteButtonNode(
 
   revalidatePath(`/projects/${projectId}`);
 }
-
 
 export async function createPage(
   projectId: string,
