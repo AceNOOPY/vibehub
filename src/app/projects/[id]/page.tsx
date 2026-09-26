@@ -8,6 +8,7 @@ import { PageNameEditor } from "@/components/page-name-editor";
 import { ButtonNodeEditor } from "@/components/button-node-editor";
 import { NodeMoveControls } from "@/components/node-move-controls";
 import { SortableNodeList } from "@/components/sortable-node-list";
+import { ProjectPagePreview } from "@/components/project-page-preview";
 import { addButtonNode, addTextNode, createPage, updateTextNode, updateButtonNode, deleteTextNode, renamePage, deletePage, deleteButtonNode, moveNode, reorderNode } from "@/app/projects/actions";
 import Link from "next/link";
 
@@ -16,11 +17,12 @@ export default async function ProjectPage({
     searchParams,
 }: {
     params: Promise<{ id: string }>;
-    searchParams: Promise<{ page?: string }>;
+    searchParams: Promise<{ page?: string; mode?: string }>;
 }) {
     const user = await requireUser();
     const { id } = await params;
-    const { page: requestedPageId } = await searchParams;
+    const { page: requestedPageId, mode } = await searchParams;
+    const isPreviewMode = mode === "preview";
 
     const [project] = await getDb()
         .select({
@@ -39,9 +41,65 @@ export default async function ProjectPage({
 
     const createProjectPage = createPage.bind(null, id);
 
+    const pageNavigation = (
+        <nav
+            aria-label="Project pages"
+            className="mt-6 flex gap-2"
+        >
+            {project.document.pages.map((page) => (
+                <Link
+                    key={page.id}
+                    href={{
+                        pathname: `/projects/${id}`,
+                        query: isPreviewMode
+                            ? { page: page.id, mode: "preview" }
+                            : { page: page.id },
+                    }}
+                    className={
+                        page.id === activePage.id
+                            ? "rounded bg-black px-4 py-2 text-white"
+                            : "rounded border px-4 py-2"
+                    }
+                >
+                    {page.name}
+                </Link>
+            ))}
+        </nav>
+    );
+
+    if (isPreviewMode) {
+        return (
+            <main className="mx-auto max-w-4xl px-6 py-12">
+                <h1 className="text-3xl font-semibold">{project.name}</h1>
+                <Link
+                    href={{
+                        pathname: `/projects/${id}`,
+                        query: { page: activePage.id },
+                    }}
+                    className="mt-4 inline-block rounded border px-4 py-2"
+                >
+                    Back to editor
+                </Link>
+                {pageNavigation}
+                <div className="mt-6">
+                    <ProjectPagePreview page={activePage} />
+                </div>
+            </main>
+        );
+    }
+
     return (
         <main className="mx-auto max-w-4xl px-6 py-12">
             <h1 className="text-3xl font-semibold">{project.name}</h1>
+            <Link
+                href={{
+                    pathname: `/projects/${id}`,
+                    query: { page: activePage.id, mode: "preview" },
+                }}
+                className="mt-4 inline-block rounded border px-4 py-2"
+            >
+                Preview
+            </Link>
             <form action={createProjectPage} className="mt-6 flex gap-2">
                 <input
                     name="name"
@@ -57,24 +115,7 @@ export default async function ProjectPage({
                     Add Page
                 </button>
             </form>
-            <nav
-                aria-label="Project pages"
-                className="mt-6 flex gap-2"
-            >
-                {project.document.pages.map((page) => (
-                    <Link
-                        key={page.id}
-                        href={`/projects/${id}?page=${page.id}`}
-                        className={
-                            page.id === activePage.id
-                                ? "rounded bg-black px-4 py-2 text-white"
-                                : "rounded border px-4 py-2"
-                        }
-                    >
-                        {page.name}
-                    </Link>
-                ))}
-            </nav>
+            {pageNavigation}
             <ul className="mt-6 space-y-2">
                 {project.document.pages.filter((page) => page.id === activePage.id).map((page) => {
                     const addText = addTextNode.bind(null, id, page.id);
