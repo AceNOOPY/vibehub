@@ -794,3 +794,99 @@ export async function moveNode(
 
   revalidatePath(`/projects/${projectId}`)
 }
+
+export async function reorderNode(
+  projectId: string,
+  pageId: string,
+  activeNodeId: string,
+  targetIndex: number,
+) {
+  if (!Number.isInteger(targetIndex)) {
+    throw new Error("Invalid target position");
+  }
+
+  const user = await requireUser();
+  const db = getDb();
+
+  const [project] = await db
+    .select({
+      document: projects.document,
+      revision: projects.revision,
+    })
+    .from(projects)
+    .where(
+      and(
+        eq(projects.id, projectId),
+        eq(projects.ownerId, user.id),
+      ),
+    )
+    .limit(1);
+
+  if (!project) {
+    throw new Error("Project not found");
+  }
+
+  const page = project.document.pages.find(
+    (page) => page.id === pageId,
+  );
+
+  if (!page) {
+    throw new Error("Page not found");
+  }
+
+  const activeIndex = page.nodes.findIndex(
+    (node) => node.id === activeNodeId,
+  );
+
+  if (activeIndex === -1) {
+    throw new Error("Node not found");
+  }
+
+  if (targetIndex < 0 || targetIndex >= page.nodes.length) {
+    throw new Error("Invalid target position");
+  }
+
+  if (activeIndex === targetIndex) {
+    return;
+  }
+
+  const reorderedNodes = [...page.nodes];
+  const [activeNode] = reorderedNodes.splice(activeIndex, 1);
+
+  if (!activeNode) {
+    throw new Error("Node not found");
+  }
+
+  reorderedNodes.splice(targetIndex, 0, activeNode);
+
+  const updatedDocument = {
+    ...project.document,
+    pages: project.document.pages.map((currentPage) =>
+      currentPage.id === pageId
+        ? { ...currentPage, nodes: reorderedNodes }
+        : currentPage,
+    ),
+  };
+
+  const updatedProjects = await db
+    .update(projects)
+    .set({
+      document: updatedDocument,
+      revision: sql`${projects.revision} + 1`,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(projects.id, projectId),
+        eq(projects.ownerId, user.id),
+        eq(projects.revision, project.revision),
+      ),
+    )
+    .returning({ id: projects.id });
+
+  if (updatedProjects.length === 0) {
+    throw new Error("Project changed while you were editing it");
+  }
+
+  revalidatePath(`/projects/${projectId}`);
+}
