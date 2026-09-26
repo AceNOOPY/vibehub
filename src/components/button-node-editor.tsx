@@ -2,7 +2,13 @@
 
 import { useState } from "react";
 
-import type { ButtonNode } from "@/db/project-document";
+import type { ButtonNode, ButtonVariant } from "@/db/project-document";
+
+const variantClasses: Record<ButtonVariant, string> = {
+    primary: "bg-blue-600 text-white",
+    secondary: "bg-slate-200 text-slate-900",
+    outline: "border border-slate-500 bg-transparent text-slate-900",
+};
 
 type ButtonNodeEditorProps = {
     node: ButtonNode;
@@ -13,6 +19,9 @@ type ButtonNodeEditorProps = {
 export function ButtonNodeEditor({ node, action, deleteAction }: ButtonNodeEditorProps) {
     const [label, setLabel] = useState(node.props.label);
     const [href, setHref] = useState(node.props.href);
+    const [variant, setVariant] = useState<ButtonVariant>(
+        node.props.variant ?? "primary",
+    );
     const [isEditing, setIsEditing] = useState(false);
 
     async function handleSubmit(formData: FormData) {
@@ -27,12 +36,13 @@ export function ButtonNodeEditor({ node, action, deleteAction }: ButtonNodeEdito
         if (!confirmed) {
             return;
         }
-            await deleteAction();
-        }
+        await deleteAction();
+    }
 
     function handleCancel() {
         setLabel(node.props.label);
         setHref(node.props.href);
+        setVariant(node.props.variant ?? "primary");
         setIsEditing(false);
     }
 
@@ -40,9 +50,10 @@ export function ButtonNodeEditor({ node, action, deleteAction }: ButtonNodeEdito
         return (
             <div className="flex items-center gap-2">
                 <a
-                    href={href} target="_blank"
+                    href={href}
+                    target="_blank"
                     rel="noopener noreferrer"
-                    className="text-blue-500 underline"
+                    className={`inline-block rounded px-4 py-2 ${variantClasses[variant]}`}
                 >
                     {label}
                 </a>
@@ -84,6 +95,19 @@ export function ButtonNodeEditor({ node, action, deleteAction }: ButtonNodeEdito
                 maxLength={2048}
                 className="flex-1 rounded border p-2"
             />
+            <select
+                name="variant"
+                aria-label="Button variant"
+                value={variant}
+                onChange={(event) =>
+                    setVariant(event.target.value as ButtonVariant)
+                }
+                className="rounded border p-2"
+            >
+                <option value="primary">Primary</option>
+                <option value="secondary">Secondary</option>
+                <option value="outline">Outline</option>
+            </select>
             <button
                 type="submit"
                 className="rounded bg-black px-4 py-2 text-white"
